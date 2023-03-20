@@ -1,5 +1,4 @@
 using EtherCAT.NET;
-using Microsoft.DotNet.PlatformAbstractions;
 using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
@@ -11,6 +10,10 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using EtherCAT.NET.Infrastructure;
 using EtherCAT.NET.Extension;
+using System.Data;
+using System.Runtime.InteropServices;
+using SOEM.PInvoke;
+using RuntimeEnvironment = Microsoft.DotNet.PlatformAbstractions.RuntimeEnvironment;
 
 namespace SampleMaster
 {
@@ -19,7 +22,7 @@ namespace SampleMaster
         static async Task Main(string[] args)
         {          
             /* Set interface name. Edit this to suit your needs. */
-            var interfaceName = "eth0";
+            var interfaceName = "Ethernet 5";
 
             /* Set ESI location. Make sure it contains ESI files! The default path is /home/{user}/.local/share/ESI */
             var localAppDataPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -75,6 +78,18 @@ namespace SampleMaster
 
                 ################## Sample code END #################*/
 
+                // var dataset = new List<object>();
+                // dataset.Add((byte)0x00);
+                //
+                // var requests = new List<SdoWriteRequest>()
+                // {
+                //     // Index 0x8000 sub index 6: Filter on
+                //     new SdoWriteRequest(0x8021, 0, dataset),
+                //     // new SdoWriteRequest(0x6000, 0x01, dataset)
+                // };
+                //
+                // slave.Extensions.Add(new InitialSettingsExtension(requests));
+
                 EcUtilities.CreateDynamicData(settings.EsiDirectoryPath, slave);
             });
 
@@ -94,52 +109,52 @@ namespace SampleMaster
             /* create variable references for later use */
             var variables = slaves.SelectMany(child => child.GetVariables()).ToList();
 
-            /* create EC Master (short sample) */
-            using (var master = new EcMaster(settings, logger))
-            {
-                try
-                {
-                    master.Configure(rootSlave);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex.Message);
-                    throw;
-                }
+            // /* create EC Master (short sample) */
+            // using (var master = new EcMaster(settings, logger))
+            // {
+            //     try
+            //     {
+            //         master.Configure(rootSlave);
+            //     }
+            //     catch (Exception ex)
+            //     {
+            //         logger.LogError(ex.Message);
+            //         throw;
+            //     }
+            //
+            //     /* start master */
+            //     var random = new Random();
+            //     var cts = new CancellationTokenSource();
+            //
+            //     var task = Task.Run(() =>
+            //     {
+            //         var sleepTime = 1000 / (int)settings.CycleFrequency;
+            //
+            //         while (!cts.IsCancellationRequested)
+            //         {
+            //             master.UpdateIO(DateTime.UtcNow);
+            //
+            //             unsafe
+            //             {
+            //                 if (variables.Any())
+            //                 {
+            //                     var myVariableSpan = new Span<int>(variables.First().DataPtr.ToPointer(), 1);
+            //                     myVariableSpan[0] = random.Next(0, 100);                              
+            //                 }
+            //             }
+            //
+            //             Thread.Sleep(sleepTime);
+            //         }
+            //     }, cts.Token);
+            //
+            //     /* wait for stop signal */
+            //     // Console.ReadKey(true);
+            //
+            //     cts.Cancel();
+            //     await task;
+            // }
 
-                /* start master */
-                var random = new Random();
-                var cts = new CancellationTokenSource();
-
-                var task = Task.Run(() =>
-                {
-                    var sleepTime = 1000 / (int)settings.CycleFrequency;
-
-                    while (!cts.IsCancellationRequested)
-                    {
-                        master.UpdateIO(DateTime.UtcNow);
-
-                        unsafe
-                        {
-                            if (variables.Any())
-                            {
-                                var myVariableSpan = new Span<int>(variables.First().DataPtr.ToPointer(), 1);
-                                myVariableSpan[0] = random.Next(0, 100);                              
-                            }
-                        }
-
-                        Thread.Sleep(sleepTime);
-                    }
-                }, cts.Token);
-
-                /* wait for stop signal */
-                Console.ReadKey(true);
-
-                cts.Cancel();
-                await task;
-            }
-
-            return; /* remove this to run real world sample*/
+            // return; /* remove this to run real world sample*/
 
             /* create EC Master (real world sample) */
             using (var master = new EcMaster(settings, logger))
@@ -180,6 +195,76 @@ namespace SampleMaster
                 logger.LogInformation($"EL3021 filter on: {filterOn}");
 
                 ################## Sample code END #################*/
+                 
+                var slave = slaves[0];
+                var pdos = slave.DynamicData.Pdos;
+                var di = pdos[0];
+                var @do = pdos[1];
+
+
+                var firstDi = di.Variables[0];
+                var firstDo = @do.Variables[0];
+
+                logger.LogInformation($"Data address: {@do.Variables[0].DataPtr}");
+
+                var dataset1 = new byte[1];
+                
+
+                while (true)
+                {
+                    EcUtilities.SdoRead(master.Context, 1, firstDi.Index, firstDi.SubIndex, ref dataset1);
+                    var data1 = BitConverter.ToBoolean(dataset1, 0);
+                    Console.WriteLine(data1);
+                    master.UpdateIO(DateTime.UtcNow);
+                    await Task.Delay(100);
+                }
+
+                //var on = 1;
+                //while (true)
+                //{
+
+                //    on = 1 - on;
+                //    Marshal.Copy(new byte[] {(byte)(on) }, 0, @do.Variables[0].DataPtr, 1);
+                //    master.UpdateIO(DateTime.UtcNow);
+                //    await Task.Delay(1000);
+                //}
+
+
+                logger.LogInformation($"Data address: {@do.Variables[0].DataPtr}");
+
+
+                // var dataset2 = new byte[1];
+                // EcUtilities.SdoRead(master.Context, 1, firstDo.Index, firstDo.SubIndex, ref dataset2);
+                // var data2 = BitConverter.ToBoolean(dataset2, 0);
+
+                // @do.Variables[0].DataPtr
+
+                // var index = slave.Esi.RxPdo
+
+                // while (true)
+                // {
+                //     logger.LogInformation("Lighting on");
+                //     EcUtilities.CheckErrorCode(master.Context,
+                //         EcUtilities.SdoWrite(master.Context,
+                //             // from 1 to n
+                //             1,
+                //             // 28672, 
+                //             // 24576,
+                //             0x8021,
+                //             2,
+                //             new List<object> { false }));
+                //     Thread.Sleep(2000);
+                // }
+
+
+                // logger.LogInformation("Lighting off");
+                // EcUtilities.CheckErrorCode(master.Context,
+                //     EcUtilities.SdoWrite(master.Context,
+                //         // from 1 to n
+                //         1,
+                //         firstDo.Index,
+                //         firstDo.SubIndex,
+                //         new List<object> {true}));
 
                 /* start master */
                 var random = new Random();
